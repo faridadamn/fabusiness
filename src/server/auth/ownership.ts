@@ -32,6 +32,18 @@ export function ownedBy(
     : ownerFilter;
 }
 
+export function assertRecordOwner(
+  recordUserId: string | null | undefined,
+  sessionUserId: string | null | undefined,
+): void {
+  const authenticatedUserId = requireUserId(sessionUserId);
+
+  if (!recordUserId || recordUserId !== authenticatedUserId) {
+    // Keep the same response for absent and foreign records to avoid enumeration.
+    throw new AuthorizationError("Resource not found or access denied.");
+  }
+}
+
 export function assertOwnedRecord<T>(record: T | undefined | null): T {
   if (!record) {
     // Do not reveal whether another user's record exists.
