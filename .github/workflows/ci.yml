@@ -57,6 +57,9 @@ jobs:
       - name: Verify active project capacity in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/active-project-limits.sql
 
+      - name: Verify capacity override audit events in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/capacity-overrides.sql
+
       - name: Typecheck
         run: npm run typecheck
 
