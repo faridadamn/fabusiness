@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   ACTIVE_PROJECT_LIMITS,
+  MIN_CAPACITY_OVERRIDE_REASON_LENGTH,
   assertActiveProjectCapacity,
   canActivateProject,
   getActiveProjectBucket,
   getRemainingActiveSlots,
+  normalizeCapacityOverrideReason,
 } from "./capacity";
 
 describe("active project capacity", () => {
@@ -31,6 +33,18 @@ describe("active project capacity", () => {
     expect(() => assertActiveProjectCapacity("main", 3)).toThrow(
       "Active project limit reached",
     );
+  });
+
+  it("requires a meaningful override reason", () => {
+    expect(MIN_CAPACITY_OVERRIDE_REASON_LENGTH).toBe(20);
+    expect(() => normalizeCapacityOverrideReason("too short")).toThrow(
+      "Override reason must contain at least 20 characters.",
+    );
+    expect(
+      normalizeCapacityOverrideReason(
+        "Urgent client commitment with signed delivery deadline.",
+      ),
+    ).toBe("Urgent client commitment with signed delivery deadline.");
   });
 
   it("never returns negative remaining slots", () => {
