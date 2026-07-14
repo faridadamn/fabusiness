@@ -12,6 +12,7 @@ import {
   getProjectForUser,
   type ProjectStatus,
 } from "@/server/repositories/projects";
+import { listRevenueEngineOptionsForUser } from "@/server/repositories/revenue-engines";
 
 const nextActions: Record<ProjectStatus, ProjectStatus[]> = {
   idea: ["active", "cancelled", "archived"], active: ["paused", "completed", "cancelled"],
@@ -30,8 +31,11 @@ export const dynamic = "force-dynamic";
 export default async function EditProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const userId = await requireSessionUser();
-  const [project, capacity, scores] = await Promise.all([
-    getProjectForUser(userId, projectId), getActiveProjectCapacityForUser(userId), listProjectScoresForUser(userId, projectId),
+  const [project, capacity, scores, revenueEngines] = await Promise.all([
+    getProjectForUser(userId, projectId),
+    getActiveProjectCapacityForUser(userId),
+    listProjectScoresForUser(userId, projectId),
+    listRevenueEngineOptionsForUser(userId),
   ]);
   const status = project.status as ProjectStatus;
   const projectBucket = getActiveProjectBucket(project.projectType);
@@ -42,7 +46,7 @@ export default async function EditProjectPage({ params }: { params: Promise<{ pr
     <section className="stack-lg content-narrow">
       <div className="page-heading"><div><p className="eyebrow">PROJECT DETAIL</p><h1 className="page-title">{project.name}</h1><p className="page-description">Status saat ini: <strong>{project.status}</strong></p></div><Link href="/projects" className="button button-secondary">Back</Link></div>
 
-      <div className="card form-card"><ProjectForm action={updateProjectAction.bind(null, project.id)} submitLabel="Save changes" initialValues={{ name: project.name, description: project.description ?? "", projectType: project.projectType, priority: project.priority as "low" | "medium" | "high" | "critical", startDate: project.startDate ?? "", targetCompletionDate: project.targetCompletionDate ?? "", estimatedHours: Number(project.estimatedHours), revenuePotential: Number(project.revenuePotential), successCriteria: project.successCriteria ?? "", stopCriteria: project.stopCriteria ?? "" }} /></div>
+      <div className="card form-card"><ProjectForm action={updateProjectAction.bind(null, project.id)} revenueEngines={revenueEngines} submitLabel="Save changes" initialValues={{ name: project.name, description: project.description ?? "", projectType: project.projectType, priority: project.priority as "low" | "medium" | "high" | "critical", revenueEngineId: project.revenueEngineId ?? undefined, startDate: project.startDate ?? "", targetCompletionDate: project.targetCompletionDate ?? "", estimatedHours: Number(project.estimatedHours), revenuePotential: Number(project.revenuePotential), successCriteria: project.successCriteria ?? "", stopCriteria: project.stopCriteria ?? "" }} /></div>
 
       <div className="card">
         <div className="card-header-row"><div><p className="eyebrow">PROJECT SCORE</p><h2>Score the opportunity</h2></div>{latestScore ? <div className="score-summary"><strong>{Number(latestScore.totalScore).toFixed(1)}</strong><span className="badge">{latestScore.recommendation}</span></div> : null}</div>
