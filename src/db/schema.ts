@@ -87,6 +87,19 @@ export const projects = pgTable("projects", {
   ...timestamps,
 });
 
+export const revenueTransactions = pgTable("revenue_transactions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => appUsers.id),
+  revenueEngineId: uuid("revenue_engine_id").notNull().references(() => revenueEngines.id),
+  projectId: uuid("project_id").references(() => projects.id),
+  transactionType: text("transaction_type").notNull(),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+  occurredOn: date("occurred_on").notNull(),
+  description: text("description").notNull(),
+  source: text("source").notNull().default("manual"),
+  ...timestamps,
+});
+
 export const projectScores = pgTable("project_scores", {
   id: uuid("id").primaryKey().defaultRandom(),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
