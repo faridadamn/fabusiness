@@ -45,8 +45,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Apply baseline migration
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0000_phase_zero_foundation.sql
+      - name: Apply database migrations
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0000_phase_zero_foundation.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0001_revenue_transactions.sql
 
       - name: Verify ownership isolation in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/ownership.sql
@@ -74,6 +76,9 @@ jobs:
 
       - name: Verify time entry ownership and aggregation in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/time-entries.sql
+
+      - name: Verify revenue transaction ownership and aggregation in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-transactions.sql
 
       - name: Typecheck
         run: npm run typecheck
