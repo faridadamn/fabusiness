@@ -1,0 +1,152 @@
+import "server-only";
+
+import { and, desc, eq, sql } from "drizzle-orm";
+
+import { db } from "@/db";
+import { auditLogs, productValidations, products, revenueEngines } from "@/db/schema";
+import {
+  assertProductTransition,
+  normalizeBuildOverrideReason,
+  type ProductStatus,
+} from "@/domain/products/lifecycle";
+import { assertOwnedRecord, ownedBy, requireUserId } from "@/server/auth/ownership";
+
+export type ProductInput = {
+  name: string;
+  description?: string | null;
+  productType: string;
+  price: string;
+  targetCustomer?: string | null;
+  problemStatement?: string | null;
+  revenueEngineId?: string | null;
+};
+
+export type ProductValidationInput = {
+  hypothesis: string;
+  validationMethod: string;
+  result: "positive" | "negative" | "inconclusive";
+  evidenceUrl?: string | null;
+  notes?: string | null;
+  validatedOn: string;
+};
+
+async function assertOwnedRevenueEngine(userId: string, engineId?: string | null) {
+  if (!engineId) return;
+  const [engine] = await db.select({ id: revenueEngines.id }).from(revenueEngines).where(and(
+    eq(revenueEngines.id, engineId),
+    ownedBy(revenueEngines.userId, userId, revenueEngines.deletedAt),
+  )).limit(1);
+  if (!engine) throw new Error("Revenue engine does not belong to this user.");
+}
+
+export async function listProductsForUser(userId: string) {
+  return db.select().from(products)
+    .where(ownedBy(products.userId, userId, products.deletedAt))
+    .orderBy(desc(products.updatedAt));
+}
+
+export async function getProductForUser(userId: string, productId: string) {
+  const [product] = await db.select().from(products).where(and(
+    eq(products.id, productId),
+    ownedBy(products.userId, userId, products.deletedAt),
+  )).limit(1);
+  return assertOwnedRecord(product);
+}
+
+export async function listProductValidationsForUser(userId: string, productId: string) {
+  await getProductForUser(userId, productId);
+  return db.select().from(productValidations).where(and(
+    eq(productValidations.userId, userId),
+    eq(productValidations.productId, productId),
+  )).orderBy(desc(productValidations.validatedOn), desc(productValidations.createdAt));
+}
+
+export async function createProductForUser(userId: string, input: ProductInput) {
+  await assertOwnedRevenueEngine(userId, input.revenueEngineId);
+  const [product] = await db.insert(products).values({
+    userId: requireUserId(userId),
+    ...input,
+    description: input.description || null,
+    targetCustomer: input.targetCustomer || null,
+    problemStatement: input.problemStatement || null,
+    revenueEngineId: input.revenueEngineId || null,
+    status: "idea",
+  }).returning();
+  return assertOwnedRecord(product);
+}
+
+export async function updateProductForUser(userId: string, productId: string, input: ProductInput) {
+  await getProductForUser(userId, productId);
+  await assertOwnedRevenueEngine(userId, input.revenueEngineId);
+  const [product] = await db.update(products).set({
+    ...input,
+    description: input.description || null,
+    targetCustomer: input.targetCustomer || null,
+    problemStatement: input.problemStatement || null,
+    revenueEngineId: input.revenueEngineId || null,
+    updatedAt: new Date(),
+  }).where(and(eq(products.id, productId), ownedBy(products.userId, userId, products.deletedAt))).returning();
+  return assertOwnedRecord(product);
+}
+
+export async function createProductValidationForUser(userId: string, productId: string, input: ProductValidationInput) {
+  await getProductForUser(userId, productId);
+  const [validation] = await db.insert(productValidations).values({
+    userId: requireUserId(userId),
+    productId,
+    ...input,
+    evidenceUrl: input.evidenceUrl || null,
+    notes: input.notes || null,
+  }).returning();
+  return validation;
+}
+
+export async function transitionProductForUser(
+  userId: string,
+  productId: string,
+  nextStatus: ProductStatus,
+  options: { overrideValidation?: boolean; overrideReason?: string | null } = {},
+) {
+  const current = await getProductForUser(userId, productId);
+  const currentStatus = current.status as ProductStatus;
+  let overrideReason: string | undefined;
+
+  if (nextStatus === "building" && currentStatus !== "validated" && currentStatus !== "paused") {
+    if (!options.overrideValidation) {
+      throw new Error("Product must be validated before building.");
+    }
+    overrideReason = normalizeBuildOverrideReason(options.overrideReason);
+  } else {
+    assertProductTransition(currentStatus, nextStatus);
+  }
+
+  if (nextStatus === "validated") {
+    const [positiveCount] = await db.select({ count: sql<number>`count(*)` }).from(productValidations).where(and(
+      eq(productValidations.userId, userId),
+      eq(productValidations.productId, productId),
+      eq(productValidations.result, "positive"),
+    ));
+    if (Number(positiveCount?.count ?? 0) === 0) {
+      throw new Error("At least one positive validation is required.");
+    }
+  }
+
+  const [product] = await db.update(products).set({
+    status: nextStatus,
+    launchedAt: nextStatus === "launched" ? new Date() : current.launchedAt,
+    updatedAt: new Date(),
+  }).where(and(eq(products.id, productId), ownedBy(products.userId, userId, products.deletedAt))).returning();
+
+  if (overrideReason) {
+    await db.insert(auditLogs).values({
+      userId: requireUserId(userId),
+      action: "product.validation_override",
+      entityType: "product",
+      entityId: productId,
+      oldValues: { status: currentStatus },
+      newValues: { status: nextStatus, overrideReason },
+    });
+  }
+
+  return assertOwnedRecord(product);
+}
