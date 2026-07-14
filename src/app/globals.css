@@ -1,0 +1,20 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #07111f;
+  color: #f7fafc;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top right, #123f4b 0, #07111f 42%, #050a12 100%); }
+button, input, textarea, select { font: inherit; }
+
+.page-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.hero-card { width: min(760px, 100%); padding: clamp(28px, 6vw, 64px); border: 1px solid rgba(160, 235, 225, .18); border-radius: 28px; background: rgba(8, 21, 36, .8); box-shadow: 0 28px 80px rgba(0, 0, 0, .32); backdrop-filter: blur(18px); }
+.eyebrow { margin: 0 0 16px; color: #75d8cb; font-size: .78rem; font-weight: 800; letter-spacing: .18em; }
+h1 { max-width: 680px; margin: 0; font-size: clamp(2.35rem, 7vw, 5rem); line-height: .98; letter-spacing: -.055em; }
+.hero-copy { max-width: 610px; margin: 24px 0; color: #b8c7d5; font-size: 1.05rem; line-height: 1.75; }
+.status-row { display: flex; align-items: center; gap: 10px; margin: 28px 0; color: #dffbf6; font-weight: 700; }
+.status-dot { width: 10px; height: 10px; border-radius: 999px; background: #75d8cb; box-shadow: 0 0 18px #75d8cb; }
+.foundation-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.foundation-list li { padding: 14px 16px; border-radius: 14px; background: rgba(255, 255, 255, .045); color: #d7e2eb; }
