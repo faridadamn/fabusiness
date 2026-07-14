@@ -100,6 +100,34 @@ export const revenueTransactions = pgTable("revenue_transactions", {
   ...timestamps,
 });
 
+export const products = pgTable("products", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => appUsers.id),
+  revenueEngineId: uuid("revenue_engine_id").references(() => revenueEngines.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  productType: text("product_type").notNull(),
+  status: text("status").notNull().default("idea"),
+  price: numeric("price", { precision: 18, scale: 2 }).notNull().default("0"),
+  targetCustomer: text("target_customer"),
+  problemStatement: text("problem_statement"),
+  launchedAt: timestamp("launched_at", { withTimezone: true }),
+  ...timestamps,
+});
+
+export const productValidations = pgTable("product_validations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => appUsers.id),
+  hypothesis: text("hypothesis").notNull(),
+  validationMethod: text("validation_method").notNull(),
+  result: text("result").notNull(),
+  evidenceUrl: text("evidence_url"),
+  notes: text("notes"),
+  validatedOn: date("validated_on").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const projectScores = pgTable("project_scores", {
   id: uuid("id").primaryKey().defaultRandom(),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
