@@ -3,7 +3,7 @@ import "server-only";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { projects, revenueEngines } from "@/db/schema";
+import { products, projects, revenueEngines } from "@/db/schema";
 import {
   assertRevenueEngineTransition,
   type RevenueEngineStatus,
@@ -109,6 +109,56 @@ export async function getRevenueEngineProjectSummaryForUser(
       actualHours: "0",
     },
     projects: linkedProjects,
+  };
+}
+
+export async function getRevenueEngineProductSummaryForUser(
+  userId: string,
+  engineId: string,
+) {
+  await getRevenueEngineForUser(userId, engineId);
+
+  const [summary] = await db
+    .select({
+      linkedProducts: count(products.id),
+      launchedProducts: sql<number>`count(*) filter (where ${products.status} = 'launched')`,
+      buildingProducts: sql<number>`count(*) filter (where ${products.status} = 'building')`,
+      validatedProducts: sql<number>`count(*) filter (where ${products.status} = 'validated')`,
+    })
+    .from(products)
+    .where(
+      and(
+        eq(products.revenueEngineId, engineId),
+        ownedBy(products.userId, userId, products.deletedAt),
+      ),
+    );
+
+  const linkedProducts = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      productType: products.productType,
+      status: products.status,
+      price: products.price,
+      launchedAt: products.launchedAt,
+    })
+    .from(products)
+    .where(
+      and(
+        eq(products.revenueEngineId, engineId),
+        ownedBy(products.userId, userId, products.deletedAt),
+      ),
+    )
+    .orderBy(desc(products.updatedAt));
+
+  return {
+    summary: summary ?? {
+      linkedProducts: 0,
+      launchedProducts: 0,
+      buildingProducts: 0,
+      validatedProducts: 0,
+    },
+    products: linkedProducts,
   };
 }
 
