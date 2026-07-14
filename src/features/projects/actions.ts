@@ -41,7 +41,14 @@ export async function updateProjectAction(projectId: string, formData: FormData)
 export async function transitionProjectAction(projectId: string, formData: FormData) {
   const userId = await requireSessionUser();
   const nextStatus = String(formData.get("nextStatus")) as ProjectStatus;
-  await transitionProjectForUser(userId, projectId, nextStatus);
+  const overrideCapacity = formData.get("overrideCapacity") === "true";
+  const overrideReason = String(formData.get("overrideReason") ?? "");
+
+  await transitionProjectForUser(userId, projectId, nextStatus, {
+    overrideCapacity,
+    overrideReason,
+  });
+
   revalidatePath("/");
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}/edit`);
