@@ -1,20 +1,16 @@
 import Link from "next/link";
 
-import {
-  PRODUCT_TRANSITIONS,
-  type ProductStatus,
-} from "@/domain/products/lifecycle";
+import { PRODUCT_TRANSITIONS, type ProductStatus } from "@/domain/products/lifecycle";
 import {
   createProductValidationAction,
+  deleteProductValidationAction,
   transitionProductAction,
   updateProductAction,
+  updateProductValidationAction,
 } from "@/features/products/actions";
 import { ProductForm } from "@/features/products/product-form";
 import { requireSessionUser } from "@/server/auth/session";
-import {
-  getProductForUser,
-  listProductValidationsForUser,
-} from "@/server/repositories/products";
+import { getProductForUser, listProductValidationsForUser } from "@/server/repositories/products";
 import { listRevenueEngineOptionsForUser } from "@/server/repositories/revenue-engines";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +43,25 @@ export default async function EditProductPage({ params }: { params: Promise<{ pr
               <label className="field field-wide">Notes<textarea name="notes" rows={3} maxLength={2000} /></label>
               <div className="form-actions field-wide"><button className="button button-primary" type="submit">Save validation</button></div>
             </form>
-            {validations.length === 0 ? <p className="muted">Belum ada evidence. Product belum dapat ditandai validated.</p> : <div className="score-history">{validations.map((validation) => <div className="project-row" key={validation.id}><div><strong>{validation.hypothesis}</strong><p>{validation.validationMethod} · {validation.validatedOn}</p></div><div className="project-economics"><strong>{validation.result}</strong><span>{validation.evidenceUrl ? "Evidence linked" : "No URL"}</span></div></div>)}</div>}
+            {validations.length === 0 ? <p className="muted">Belum ada evidence. Product belum dapat ditandai validated.</p> : (
+              <div className="transaction-list">
+                {validations.map((validation) => (
+                  <details className="transaction-item" key={validation.id}>
+                    <summary><div><strong>{validation.hypothesis}</strong><p>{validation.validationMethod} · {validation.validatedOn}</p></div><div className="project-economics"><strong>{validation.result}</strong><span>{validation.evidenceUrl ? "Evidence linked" : "No URL"}</span></div></summary>
+                    <form action={updateProductValidationAction.bind(null, product.id, validation.id)} className="form-grid transaction-edit-form">
+                      <label className="field field-wide">Hypothesis<textarea name="hypothesis" rows={3} minLength={5} defaultValue={validation.hypothesis} required /></label>
+                      <label className="field">Validation method<input name="validationMethod" minLength={3} defaultValue={validation.validationMethod} required /></label>
+                      <label className="field">Result<select name="result" defaultValue={validation.result}><option value="positive">Positive</option><option value="negative">Negative</option><option value="inconclusive">Inconclusive</option></select></label>
+                      <label className="field">Validation date<input type="date" name="validatedOn" defaultValue={validation.validatedOn} required /></label>
+                      <label className="field">Evidence URL<input type="url" name="evidenceUrl" defaultValue={validation.evidenceUrl ?? ""} /></label>
+                      <label className="field field-wide">Notes<textarea name="notes" rows={3} maxLength={2000} defaultValue={validation.notes ?? ""} /></label>
+                      <div className="form-actions field-wide"><button className="button button-primary" type="submit">Save edit</button></div>
+                    </form>
+                    <form action={deleteProductValidationAction.bind(null, product.id, validation.id)} className="transaction-delete-form"><button className="button button-ghost" type="submit">Soft delete validation</button></form>
+                  </details>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="stack-lg">
