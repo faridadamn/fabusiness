@@ -87,6 +87,9 @@ jobs:
       - name: Verify product ownership, validation, and override audit
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/products.sql
 
+      - name: Verify revenue engine linked product isolation
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-engine-products.sql
+
       - name: Typecheck
         run: npm run typecheck
 
