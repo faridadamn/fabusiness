@@ -51,6 +51,9 @@ jobs:
       - name: Verify ownership isolation in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/ownership.sql
 
+      - name: Verify project mutation isolation in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/project-mutations.sql
+
       - name: Typecheck
         run: npm run typecheck
 
