@@ -1,0 +1,37 @@
+export const ACTIVE_PROJECT_LIMITS = {
+  main: 3,
+  experiment: 2,
+} as const;
+
+export type ActiveProjectBucket = keyof typeof ACTIVE_PROJECT_LIMITS;
+
+export function getActiveProjectBucket(projectType: string): ActiveProjectBucket {
+  return projectType.trim().toLowerCase() === "experiment" ? "experiment" : "main";
+}
+
+export function canActivateProject(
+  bucket: ActiveProjectBucket,
+  currentActiveCount: number,
+): boolean {
+  return currentActiveCount < ACTIVE_PROJECT_LIMITS[bucket];
+}
+
+export function assertActiveProjectCapacity(
+  bucket: ActiveProjectBucket,
+  currentActiveCount: number,
+): void {
+  const limit = ACTIVE_PROJECT_LIMITS[bucket];
+
+  if (!canActivateProject(bucket, currentActiveCount)) {
+    throw new Error(
+      `Active project limit reached for ${bucket}: ${currentActiveCount}/${limit}. Pause or complete another project first.`,
+    );
+  }
+}
+
+export function getRemainingActiveSlots(
+  bucket: ActiveProjectBucket,
+  currentActiveCount: number,
+): number {
+  return Math.max(ACTIVE_PROJECT_LIMITS[bucket] - currentActiveCount, 0);
+}
