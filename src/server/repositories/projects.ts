@@ -4,6 +4,11 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { projects } from "@/db/schema";
+import {
+  assertProjectTransition,
+  canSoftDeleteProject,
+  type ProjectStatus,
+} from "@/domain/projects/lifecycle";
 import { assertOwnedRecord, ownedBy, requireUserId } from "@/server/auth/ownership";
 
 export type ProjectInput = {
@@ -18,46 +23,6 @@ export type ProjectInput = {
   successCriteria?: string | null;
   stopCriteria?: string | null;
 };
-
-export const PROJECT_STATUSES = [
-  "idea",
-  "active",
-  "paused",
-  "completed",
-  "cancelled",
-  "archived",
-] as const;
-
-export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
-
-export const PROJECT_TRANSITIONS: Record<ProjectStatus, readonly ProjectStatus[]> = {
-  idea: ["active", "cancelled", "archived"],
-  active: ["paused", "completed", "cancelled"],
-  paused: ["active", "cancelled", "archived"],
-  completed: ["archived"],
-  cancelled: ["archived"],
-  archived: [],
-};
-
-export function canTransitionProject(
-  currentStatus: ProjectStatus,
-  nextStatus: ProjectStatus,
-): boolean {
-  return PROJECT_TRANSITIONS[currentStatus].includes(nextStatus);
-}
-
-export function assertProjectTransition(
-  currentStatus: ProjectStatus,
-  nextStatus: ProjectStatus,
-): void {
-  if (!canTransitionProject(currentStatus, nextStatus)) {
-    throw new Error(`Invalid project transition: ${currentStatus} -> ${nextStatus}`);
-  }
-}
-
-export function canSoftDeleteProject(status: ProjectStatus): boolean {
-  return status === "cancelled" || status === "archived";
-}
 
 export async function listProjectsForUser(userId: string) {
   return db
@@ -160,8 +125,7 @@ export async function transitionProjectForUser(
 
 /**
  * Archive keeps a project visible for historical reporting.
- * Soft delete is a separate, destructive operation and is only allowed after
- * cancellation or archival. Normal reads always exclude soft-deleted records.
+ * Soft delete is destructive and only allowed after cancellation or archival.
  */
 export async function softDeleteProjectForUser(userId: string, projectId: string) {
   const current = await getProjectForUser(userId, projectId);
