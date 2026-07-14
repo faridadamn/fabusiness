@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getActiveProjectBucket } from "@/domain/projects/capacity";
+import { type ProjectStatus } from "@/domain/projects/lifecycle";
 import { PROJECT_SCORE_FIELDS } from "@/domain/projects/scoring";
 import { transitionProjectAction, updateProjectAction } from "@/features/projects/actions";
 import { ProjectForm } from "@/features/projects/project-form";
@@ -10,7 +11,6 @@ import { listProjectScoresForUser } from "@/server/repositories/project-scores";
 import {
   getActiveProjectCapacityForUser,
   getProjectForUser,
-  type ProjectStatus,
 } from "@/server/repositories/projects";
 import { listRevenueEngineOptionsForUser } from "@/server/repositories/revenue-engines";
 
