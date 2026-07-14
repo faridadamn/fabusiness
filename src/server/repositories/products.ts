@@ -109,7 +109,7 @@ export async function updateProductValidationForUser(
   input: ProductValidationInput,
 ) {
   await getProductForUser(userId, productId);
-  const [current] = await db.execute<{
+  const currentResult = await db.execute<{
     id: string;
     hypothesis: string;
     validation_method: string;
@@ -121,6 +121,7 @@ export async function updateProductValidationForUser(
       from product_validations
       where id = ${validationId} and product_id = ${productId} and user_id = ${userId} and deleted_at is null
       limit 1`);
+  const current = currentResult.rows[0];
   if (!current) throw new Error("Validation record not found.");
 
   await db.execute(sql`update product_validations set
@@ -137,10 +138,11 @@ export async function updateProductValidationForUser(
 
 export async function softDeleteProductValidationForUser(userId: string, productId: string, validationId: string) {
   await getProductForUser(userId, productId);
-  const [current] = await db.execute<{ id: string; result: string; hypothesis: string }>(sql`
+  const currentResult = await db.execute<{ id: string; result: string; hypothesis: string }>(sql`
     update product_validations set deleted_at = now(), updated_at = now()
     where id = ${validationId} and product_id = ${productId} and user_id = ${userId} and deleted_at is null
     returning id, result, hypothesis`);
+  const current = currentResult.rows[0];
   if (!current) throw new Error("Validation record not found.");
 
   await db.insert(auditLogs).values({
