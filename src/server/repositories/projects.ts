@@ -3,12 +3,14 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { projects } from "@/db/schema";
+import { auditLogs, projects } from "@/db/schema";
 import {
   ACTIVE_PROJECT_LIMITS,
   assertActiveProjectCapacity,
+  canActivateProject,
   getActiveProjectBucket,
   getRemainingActiveSlots,
+  normalizeCapacityOverrideReason,
   type ActiveProjectBucket,
 } from "@/domain/projects/capacity";
 import {
@@ -35,6 +37,11 @@ export type ActiveProjectCapacity = Record<
   ActiveProjectBucket,
   { active: number; limit: number; remaining: number }
 >;
+
+export type ProjectTransitionOptions = {
+  overrideCapacity?: boolean;
+  overrideReason?: string | null;
+};
 
 export async function listProjectsForUser(userId: string) {
   return db
@@ -156,16 +163,39 @@ export async function transitionProjectForUser(
   userId: string,
   projectId: string,
   nextStatus: ProjectStatus,
+  options: ProjectTransitionOptions = {},
 ) {
   const current = await getProjectForUser(userId, projectId);
   const currentStatus = current.status as ProjectStatus;
 
   assertProjectTransition(currentStatus, nextStatus);
 
+  let capacityOverrideAudit:
+    | {
+        bucket: ActiveProjectBucket;
+        activeCount: number;
+        limit: number;
+        reason: string;
+      }
+    | undefined;
+
   if (nextStatus === "active" && currentStatus !== "active") {
     const bucket = getActiveProjectBucket(current.projectType);
     const capacity = await getActiveProjectCapacityForUser(userId);
-    assertActiveProjectCapacity(bucket, capacity[bucket].active);
+    const activeCount = capacity[bucket].active;
+
+    if (!canActivateProject(bucket, activeCount)) {
+      if (!options.overrideCapacity) {
+        assertActiveProjectCapacity(bucket, activeCount);
+      }
+
+      capacityOverrideAudit = {
+        bucket,
+        activeCount,
+        limit: ACTIVE_PROJECT_LIMITS[bucket],
+        reason: normalizeCapacityOverrideReason(options.overrideReason),
+      };
+    }
   }
 
   const [project] = await db
@@ -186,7 +216,28 @@ export async function transitionProjectForUser(
     )
     .returning();
 
-  return assertOwnedRecord(project);
+  const updatedProject = assertOwnedRecord(project);
+
+  if (capacityOverrideAudit) {
+    await db.insert(auditLogs).values({
+      userId: requireUserId(userId),
+      action: "project.capacity_override",
+      entityType: "project",
+      entityId: projectId,
+      oldValues: {
+        status: currentStatus,
+        activeCount: capacityOverrideAudit.activeCount,
+        limit: capacityOverrideAudit.limit,
+        bucket: capacityOverrideAudit.bucket,
+      },
+      newValues: {
+        status: nextStatus,
+        overrideReason: capacityOverrideAudit.reason,
+      },
+    });
+  }
+
+  return updatedProject;
 }
 
 /**
