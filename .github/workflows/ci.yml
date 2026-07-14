@@ -66,6 +66,9 @@ jobs:
       - name: Verify revenue engine ownership in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-engines.sql
 
+      - name: Verify project revenue engine ownership links in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/project-revenue-engine-links.sql
+
       - name: Typecheck
         run: npm run typecheck
 
