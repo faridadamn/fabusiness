@@ -9,8 +9,10 @@ import { requireSessionUser } from "@/server/auth/session";
 import {
   createProductForUser,
   createProductValidationForUser,
+  softDeleteProductValidationForUser,
   transitionProductForUser,
   updateProductForUser,
+  updateProductValidationForUser,
 } from "@/server/repositories/products";
 
 const productSchema = z.object({
@@ -34,15 +36,21 @@ const validationSchema = z.object({
 
 function parseProduct(formData: FormData) {
   const values = productSchema.parse({
-    name: formData.get("name"),
-    description: formData.get("description") || undefined,
-    productType: formData.get("productType"),
-    price: formData.get("price"),
+    name: formData.get("name"), description: formData.get("description") || undefined,
+    productType: formData.get("productType"), price: formData.get("price"),
     targetCustomer: formData.get("targetCustomer") || undefined,
     problemStatement: formData.get("problemStatement") || undefined,
     revenueEngineId: formData.get("revenueEngineId") || undefined,
   });
   return { ...values, price: String(values.price) };
+}
+
+function parseValidation(formData: FormData) {
+  return validationSchema.parse({
+    hypothesis: formData.get("hypothesis"), validationMethod: formData.get("validationMethod"),
+    result: formData.get("result"), evidenceUrl: formData.get("evidenceUrl") || undefined,
+    notes: formData.get("notes") || undefined, validatedOn: formData.get("validatedOn"),
+  });
 }
 
 export async function createProductAction(formData: FormData) {
@@ -55,21 +63,24 @@ export async function createProductAction(formData: FormData) {
 export async function updateProductAction(productId: string, formData: FormData) {
   const userId = await requireSessionUser();
   await updateProductForUser(userId, productId, parseProduct(formData));
-  revalidatePath("/products");
-  revalidatePath(`/products/${productId}/edit`);
+  revalidatePath("/products"); revalidatePath(`/products/${productId}/edit`);
 }
 
 export async function createProductValidationAction(productId: string, formData: FormData) {
   const userId = await requireSessionUser();
-  const values = validationSchema.parse({
-    hypothesis: formData.get("hypothesis"),
-    validationMethod: formData.get("validationMethod"),
-    result: formData.get("result"),
-    evidenceUrl: formData.get("evidenceUrl") || undefined,
-    notes: formData.get("notes") || undefined,
-    validatedOn: formData.get("validatedOn"),
-  });
-  await createProductValidationForUser(userId, productId, values);
+  await createProductValidationForUser(userId, productId, parseValidation(formData));
+  revalidatePath(`/products/${productId}/edit`);
+}
+
+export async function updateProductValidationAction(productId: string, validationId: string, formData: FormData) {
+  const userId = await requireSessionUser();
+  await updateProductValidationForUser(userId, productId, validationId, parseValidation(formData));
+  revalidatePath(`/products/${productId}/edit`);
+}
+
+export async function deleteProductValidationAction(productId: string, validationId: string) {
+  const userId = await requireSessionUser();
+  await softDeleteProductValidationForUser(userId, productId, validationId);
   revalidatePath(`/products/${productId}/edit`);
 }
 
@@ -80,6 +91,5 @@ export async function transitionProductAction(productId: string, formData: FormD
     overrideValidation: formData.get("overrideValidation") === "true",
     overrideReason: String(formData.get("overrideReason") || ""),
   });
-  revalidatePath("/products");
-  revalidatePath(`/products/${productId}/edit`);
+  revalidatePath("/products"); revalidatePath(`/products/${productId}/edit`);
 }
