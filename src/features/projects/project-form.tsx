@@ -1,12 +1,20 @@
 import type { ProjectFormValues } from "./schema";
 
+export type RevenueEngineOption = {
+  id: string;
+  name: string;
+  status: string;
+};
+
 export function ProjectForm({
   action,
   initialValues,
+  revenueEngines = [],
   submitLabel,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   initialValues?: Partial<ProjectFormValues>;
+  revenueEngines?: RevenueEngineOption[];
   submitLabel: string;
 }) {
   return (
@@ -34,6 +42,19 @@ export function ProjectForm({
           <option value="high">High</option>
           <option value="critical">Critical</option>
         </select>
+      </label>
+
+      <label className="field field-span-2">
+        <span>Revenue engine</span>
+        <select name="revenueEngineId" defaultValue={initialValues?.revenueEngineId ?? ""}>
+          <option value="">Unassigned</option>
+          {revenueEngines.map((engine) => (
+            <option key={engine.id} value={engine.id}>
+              {engine.name} ({engine.status})
+            </option>
+          ))}
+        </select>
+        <small className="muted">Hubungkan project hanya bila ada jalur pendapatan yang jelas.</small>
       </label>
 
       <label className="field">
