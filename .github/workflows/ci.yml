@@ -60,6 +60,9 @@ jobs:
       - name: Verify capacity override audit events in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/capacity-overrides.sql
 
+      - name: Verify project score ownership in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/project-scoring.sql
+
       - name: Typecheck
         run: npm run typecheck
 
