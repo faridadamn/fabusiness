@@ -51,6 +51,9 @@ jobs:
       - name: Apply revenue transaction migration
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0001_revenue_transactions.sql
 
+      - name: Apply product lifecycle migration
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0002_products.sql
+
       - name: Verify ownership isolation in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/ownership.sql
 
@@ -80,6 +83,9 @@ jobs:
 
       - name: Verify revenue transaction filters and mutations
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-transaction-management.sql
+
+      - name: Verify product ownership, validation, and override audit
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/products.sql
 
       - name: Typecheck
         run: npm run typecheck
