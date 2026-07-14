@@ -5,6 +5,13 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { projects } from "@/db/schema";
 import {
+  ACTIVE_PROJECT_LIMITS,
+  assertActiveProjectCapacity,
+  getActiveProjectBucket,
+  getRemainingActiveSlots,
+  type ActiveProjectBucket,
+} from "@/domain/projects/capacity";
+import {
   assertProjectTransition,
   canSoftDeleteProject,
   type ProjectStatus,
@@ -24,12 +31,53 @@ export type ProjectInput = {
   stopCriteria?: string | null;
 };
 
+export type ActiveProjectCapacity = Record<
+  ActiveProjectBucket,
+  { active: number; limit: number; remaining: number }
+>;
+
 export async function listProjectsForUser(userId: string) {
   return db
     .select()
     .from(projects)
     .where(ownedBy(projects.userId, userId, projects.deletedAt))
     .orderBy(desc(projects.updatedAt));
+}
+
+export async function getActiveProjectCapacityForUser(
+  userId: string,
+): Promise<ActiveProjectCapacity> {
+  const activeProjects = await db
+    .select({ projectType: projects.projectType })
+    .from(projects)
+    .where(
+      and(
+        ownedBy(projects.userId, userId, projects.deletedAt),
+        eq(projects.status, "active"),
+      ),
+    );
+
+  const counts: Record<ActiveProjectBucket, number> = {
+    main: 0,
+    experiment: 0,
+  };
+
+  for (const project of activeProjects) {
+    counts[getActiveProjectBucket(project.projectType)] += 1;
+  }
+
+  return {
+    main: {
+      active: counts.main,
+      limit: ACTIVE_PROJECT_LIMITS.main,
+      remaining: getRemainingActiveSlots("main", counts.main),
+    },
+    experiment: {
+      active: counts.experiment,
+      limit: ACTIVE_PROJECT_LIMITS.experiment,
+      remaining: getRemainingActiveSlots("experiment", counts.experiment),
+    },
+  };
 }
 
 export async function getProjectForUser(userId: string, projectId: string) {
@@ -70,6 +118,18 @@ export async function updateProjectForUser(
   projectId: string,
   input: ProjectInput,
 ) {
+  const current = await getProjectForUser(userId, projectId);
+
+  if (current.status === "active") {
+    const currentBucket = getActiveProjectBucket(current.projectType);
+    const nextBucket = getActiveProjectBucket(input.projectType);
+
+    if (currentBucket !== nextBucket) {
+      const capacity = await getActiveProjectCapacityForUser(userId);
+      assertActiveProjectCapacity(nextBucket, capacity[nextBucket].active);
+    }
+  }
+
   const [project] = await db
     .update(projects)
     .set({
@@ -102,6 +162,12 @@ export async function transitionProjectForUser(
 
   assertProjectTransition(currentStatus, nextStatus);
 
+  if (nextStatus === "active" && currentStatus !== "active") {
+    const bucket = getActiveProjectBucket(current.projectType);
+    const capacity = await getActiveProjectCapacityForUser(userId);
+    assertActiveProjectCapacity(bucket, capacity[bucket].active);
+  }
+
   const [project] = await db
     .update(projects)
     .set({
@@ -125,7 +191,8 @@ export async function transitionProjectForUser(
 
 /**
  * Archive keeps a project visible for historical reporting.
- * Soft delete is destructive and only allowed after cancellation or archival.
+ * Soft delete is a separate, destructive operation and is only allowed after
+ * cancellation or archival. Normal reads always exclude soft-deleted records.
  */
 export async function softDeleteProjectForUser(userId: string, projectId: string) {
   const current = await getProjectForUser(userId, projectId);
