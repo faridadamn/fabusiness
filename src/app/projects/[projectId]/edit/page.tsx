@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getActiveProjectBucket } from "@/domain/projects/capacity";
 import {
   transitionProjectAction,
   updateProjectAction,
@@ -7,6 +8,7 @@ import {
 import { ProjectForm } from "@/features/projects/project-form";
 import { requireSessionUser } from "@/server/auth/session";
 import {
+  getActiveProjectCapacityForUser,
   getProjectForUser,
   type ProjectStatus,
 } from "@/server/repositories/projects";
@@ -29,8 +31,13 @@ export default async function EditProjectPage({
 }) {
   const { projectId } = await params;
   const userId = await requireSessionUser();
-  const project = await getProjectForUser(userId, projectId);
+  const [project, capacity] = await Promise.all([
+    getProjectForUser(userId, projectId),
+    getActiveProjectCapacityForUser(userId),
+  ]);
   const status = project.status as ProjectStatus;
+  const projectBucket = getActiveProjectBucket(project.projectType);
+  const activationBlocked = capacity[projectBucket].remaining === 0;
 
   return (
     <section className="stack-lg content-narrow">
@@ -79,20 +86,59 @@ export default async function EditProjectPage({
           <p className="muted">Project ini sudah berada pada status final.</p>
         ) : (
           <div className="action-row">
-            {nextActions[status].map((nextStatus) => (
-              <form
-                key={nextStatus}
-                action={transitionProjectAction.bind(null, project.id)}
-              >
-                <input type="hidden" name="nextStatus" value={nextStatus} />
-                <button className="button button-secondary" type="submit">
-                  Mark as {nextStatus}
-                </button>
-              </form>
-            ))}
+            {nextActions[status].map((nextStatus) => {
+              const isBlockedActivation = nextStatus === "active" && activationBlocked;
+
+              if (isBlockedActivation) {
+                return null;
+              }
+
+              return (
+                <form
+                  key={nextStatus}
+                  action={transitionProjectAction.bind(null, project.id)}
+                >
+                  <input type="hidden" name="nextStatus" value={nextStatus} />
+                  <button className="button button-secondary" type="submit">
+                    Mark as {nextStatus}
+                  </button>
+                </form>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {nextActions[status].includes("active") && activationBlocked ? (
+        <div className="card override-card">
+          <div>
+            <p className="eyebrow">CAPACITY OVERRIDE</p>
+            <h2>{projectBucket === "experiment" ? "Experiment" : "Main project"} capacity is full</h2>
+            <p className="muted">
+              Saat ini ada {capacity[projectBucket].active}/{capacity[projectBucket].limit} project aktif.
+              Override hanya digunakan untuk komitmen yang memang lebih penting daripada batas fokus normal.
+            </p>
+          </div>
+
+          <form action={transitionProjectAction.bind(null, project.id)} className="override-form">
+            <input type="hidden" name="nextStatus" value="active" />
+            <input type="hidden" name="overrideCapacity" value="true" />
+            <label className="field field-wide">
+              Alasan override
+              <textarea
+                name="overrideReason"
+                rows={4}
+                minLength={20}
+                required
+                placeholder="Jelaskan komitmen bisnis, deadline, atau alasan strategis yang membenarkan tambahan project aktif."
+              />
+            </label>
+            <button className="button button-secondary" type="submit">
+              Activate with audited override
+            </button>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }
