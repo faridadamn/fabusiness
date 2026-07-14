@@ -30,6 +30,35 @@ export const PROJECT_STATUSES = [
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
+export const PROJECT_TRANSITIONS: Record<ProjectStatus, readonly ProjectStatus[]> = {
+  idea: ["active", "cancelled", "archived"],
+  active: ["paused", "completed", "cancelled"],
+  paused: ["active", "cancelled", "archived"],
+  completed: ["archived"],
+  cancelled: ["archived"],
+  archived: [],
+};
+
+export function canTransitionProject(
+  currentStatus: ProjectStatus,
+  nextStatus: ProjectStatus,
+): boolean {
+  return PROJECT_TRANSITIONS[currentStatus].includes(nextStatus);
+}
+
+export function assertProjectTransition(
+  currentStatus: ProjectStatus,
+  nextStatus: ProjectStatus,
+): void {
+  if (!canTransitionProject(currentStatus, nextStatus)) {
+    throw new Error(`Invalid project transition: ${currentStatus} -> ${nextStatus}`);
+  }
+}
+
+export function canSoftDeleteProject(status: ProjectStatus): boolean {
+  return status === "cancelled" || status === "archived";
+}
+
 export async function listProjectsForUser(userId: string) {
   return db
     .select()
@@ -98,15 +127,6 @@ export async function updateProjectForUser(
   return assertOwnedRecord(project);
 }
 
-const allowedTransitions: Record<ProjectStatus, ProjectStatus[]> = {
-  idea: ["active", "cancelled", "archived"],
-  active: ["paused", "completed", "cancelled"],
-  paused: ["active", "cancelled", "archived"],
-  completed: ["archived"],
-  cancelled: ["archived"],
-  archived: [],
-};
-
 export async function transitionProjectForUser(
   userId: string,
   projectId: string,
@@ -115,17 +135,45 @@ export async function transitionProjectForUser(
   const current = await getProjectForUser(userId, projectId);
   const currentStatus = current.status as ProjectStatus;
 
-  if (!allowedTransitions[currentStatus]?.includes(nextStatus)) {
-    throw new Error(`Invalid project transition: ${currentStatus} -> ${nextStatus}`);
-  }
+  assertProjectTransition(currentStatus, nextStatus);
 
   const [project] = await db
     .update(projects)
     .set({
       status: nextStatus,
-      actualCompletionDate: nextStatus === "completed" ? new Date().toISOString().slice(0, 10) : current.actualCompletionDate,
+      actualCompletionDate:
+        nextStatus === "completed"
+          ? new Date().toISOString().slice(0, 10)
+          : current.actualCompletionDate,
       updatedAt: new Date(),
     })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        ownedBy(projects.userId, userId, projects.deletedAt),
+      ),
+    )
+    .returning();
+
+  return assertOwnedRecord(project);
+}
+
+/**
+ * Archive keeps a project visible for historical reporting.
+ * Soft delete is a separate, destructive operation and is only allowed after
+ * cancellation or archival. Normal reads always exclude soft-deleted records.
+ */
+export async function softDeleteProjectForUser(userId: string, projectId: string) {
+  const current = await getProjectForUser(userId, projectId);
+  const status = current.status as ProjectStatus;
+
+  if (!canSoftDeleteProject(status)) {
+    throw new Error("Only cancelled or archived projects can be deleted.");
+  }
+
+  const [project] = await db
+    .update(projects)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
     .where(
       and(
         eq(projects.id, projectId),
