@@ -1,32 +1,51 @@
-const foundationItems = [
-  "MVP scope and domain boundaries",
-  "Next.js and strict TypeScript baseline",
-  "Supabase environment contract",
-  "Database and RLS plan",
-  "Responsive application shell",
-];
+import { signOut } from "@/auth";
+import { requireSessionUser } from "@/server/auth/session";
+import { listProjectsForUser } from "@/server/repositories/projects";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const userId = await requireSessionUser();
+  const projects = await listProjectsForUser(userId);
+
   return (
     <main className="page-shell">
       <section className="hero-card">
-        <p className="eyebrow">FA BUSINESS OS</p>
-        <h1>Build the system that decides what matters next.</h1>
-        <p className="hero-copy">
-          Phase 0 establishes the technical and product foundation for a focused,
-          revenue-oriented personal business operating system.
-        </p>
-
         <div className="status-row">
           <span className="status-dot" aria-hidden="true" />
-          <span>Phase 0 — Foundation in progress</span>
+          <span>Authenticated workspace</span>
         </div>
 
-        <ul className="foundation-list">
-          {foundationItems.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
+        <p className="eyebrow">FA BUSINESS OS</p>
+        <h1>Command center foundation is connected.</h1>
+        <p className="hero-copy">
+          Session identity, Neon database access, and project ownership filtering
+          are now wired into the first protected screen.
+        </p>
+
+        <div className="foundation-list">
+          <p>
+            Active project records: <strong>{projects.length}</strong>
+          </p>
+          {projects.length === 0 ? (
+            <p>No project has been created for this account.</p>
+          ) : (
+            <ul>
+              {projects.slice(0, 5).map((project) => (
+                <li key={project.id}>{project.name}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <form
+          action={async () => {
+            "use server";
+            await signOut({ redirectTo: "/login" });
+          }}
+        >
+          <button type="submit">Keluar</button>
+        </form>
       </section>
     </main>
   );
