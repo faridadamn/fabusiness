@@ -1,9 +1,9 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { revenueEngines } from "@/db/schema";
+import { projects, revenueEngines } from "@/db/schema";
 import {
   assertRevenueEngineTransition,
   type RevenueEngineStatus,
@@ -30,6 +30,18 @@ export async function listRevenueEnginesForUser(userId: string) {
     .orderBy(desc(revenueEngines.updatedAt));
 }
 
+export async function listRevenueEngineOptionsForUser(userId: string) {
+  return db
+    .select({
+      id: revenueEngines.id,
+      name: revenueEngines.name,
+      status: revenueEngines.status,
+    })
+    .from(revenueEngines)
+    .where(ownedBy(revenueEngines.userId, userId, revenueEngines.deletedAt))
+    .orderBy(revenueEngines.name);
+}
+
 export async function getRevenueEngineForUser(userId: string, engineId: string) {
   const [engine] = await db
     .select()
@@ -43,6 +55,61 @@ export async function getRevenueEngineForUser(userId: string, engineId: string) 
     .limit(1);
 
   return assertOwnedRecord(engine);
+}
+
+export async function getRevenueEngineProjectSummaryForUser(
+  userId: string,
+  engineId: string,
+) {
+  await getRevenueEngineForUser(userId, engineId);
+
+  const [summary] = await db
+    .select({
+      linkedProjects: count(projects.id),
+      activeProjects: sql<number>`count(*) filter (where ${projects.status} = 'active')`,
+      revenuePotential: sql<string>`coalesce(sum(${projects.revenuePotential}), 0)`,
+      actualRevenue: sql<string>`coalesce(sum(${projects.actualRevenue}), 0)`,
+      estimatedHours: sql<string>`coalesce(sum(${projects.estimatedHours}), 0)`,
+      actualHours: sql<string>`coalesce(sum(${projects.actualHours}), 0)`,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.revenueEngineId, engineId),
+        ownedBy(projects.userId, userId, projects.deletedAt),
+      ),
+    );
+
+  const linkedProjects = await db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      status: projects.status,
+      revenuePotential: projects.revenuePotential,
+      actualRevenue: projects.actualRevenue,
+      estimatedHours: projects.estimatedHours,
+      actualHours: projects.actualHours,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.revenueEngineId, engineId),
+        ownedBy(projects.userId, userId, projects.deletedAt),
+      ),
+    )
+    .orderBy(desc(projects.updatedAt));
+
+  return {
+    summary: summary ?? {
+      linkedProjects: 0,
+      activeProjects: 0,
+      revenuePotential: "0",
+      actualRevenue: "0",
+      estimatedHours: "0",
+      actualHours: "0",
+    },
+    projects: linkedProjects,
+  };
 }
 
 export async function createRevenueEngineForUser(
