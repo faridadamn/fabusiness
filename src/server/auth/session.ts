@@ -16,3 +16,7 @@ export async function requireUserId(): Promise<string> {
   if (!userId) throw new AuthenticationRequiredError();
   return userId;
 }
+
+export async function requireSessionUser(): Promise<string> {
+  return requireUserId();
+}
