@@ -54,6 +54,9 @@ jobs:
       - name: Apply product lifecycle migration
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0002_products.sql
 
+      - name: Apply product validation history migration
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0003_product_validation_history.sql
+
       - name: Verify ownership isolation in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/ownership.sql
 
@@ -89,6 +92,9 @@ jobs:
 
       - name: Verify revenue engine linked product isolation
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-engine-products.sql
+
+      - name: Verify product validation edit and soft delete
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/product-validation-management.sql
 
       - name: Typecheck
         run: npm run typecheck
