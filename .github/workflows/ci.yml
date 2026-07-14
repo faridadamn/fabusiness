@@ -48,6 +48,9 @@ jobs:
       - name: Apply baseline migration
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0000_phase_zero_foundation.sql
 
+      - name: Apply revenue transaction migration
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0001_revenue_transactions.sql
+
       - name: Verify ownership isolation in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/ownership.sql
 
@@ -71,6 +74,12 @@ jobs:
 
       - name: Verify revenue engine economics aggregation in PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-engine-economics.sql
+
+      - name: Verify revenue transaction ownership and aggregation
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-transactions.sql
+
+      - name: Verify revenue transaction filters and mutations
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-transaction-management.sql
 
       - name: Typecheck
         run: npm run typecheck
