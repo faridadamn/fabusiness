@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./navigation.css";
 
 export const metadata: Metadata = {
   title: "FA Business OS",
