@@ -4,7 +4,7 @@ import {
   AuthorizationError,
   assertOwnedRecord,
   requireUserId,
-} from "@/server/auth/ownership";
+} from "./ownership";
 
 describe("ownership guards", () => {
   it("requires an authenticated user id", () => {
