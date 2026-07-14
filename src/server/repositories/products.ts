@@ -58,6 +58,7 @@ export async function listProductValidationsForUser(userId: string, productId: s
   return db.select().from(productValidations).where(and(
     eq(productValidations.userId, userId),
     eq(productValidations.productId, productId),
+    sql`${productValidations}.deleted_at is null`,
   )).orderBy(desc(productValidations.validatedOn), desc(productValidations.createdAt));
 }
 
@@ -101,6 +102,54 @@ export async function createProductValidationForUser(userId: string, productId: 
   return validation;
 }
 
+export async function updateProductValidationForUser(
+  userId: string,
+  productId: string,
+  validationId: string,
+  input: ProductValidationInput,
+) {
+  await getProductForUser(userId, productId);
+  const [current] = await db.execute<{
+    id: string;
+    hypothesis: string;
+    validation_method: string;
+    result: string;
+    evidence_url: string | null;
+    notes: string | null;
+    validated_on: string;
+  }>(sql`select id, hypothesis, validation_method, result, evidence_url, notes, validated_on
+      from product_validations
+      where id = ${validationId} and product_id = ${productId} and user_id = ${userId} and deleted_at is null
+      limit 1`);
+  if (!current) throw new Error("Validation record not found.");
+
+  await db.execute(sql`update product_validations set
+    hypothesis = ${input.hypothesis}, validation_method = ${input.validationMethod}, result = ${input.result},
+    evidence_url = ${input.evidenceUrl || null}, notes = ${input.notes || null}, validated_on = ${input.validatedOn}, updated_at = now()
+    where id = ${validationId} and product_id = ${productId} and user_id = ${userId} and deleted_at is null`);
+
+  await db.insert(auditLogs).values({
+    userId: requireUserId(userId), action: "product.validation_updated", entityType: "product_validation", entityId: validationId,
+    oldValues: current,
+    newValues: input,
+  });
+}
+
+export async function softDeleteProductValidationForUser(userId: string, productId: string, validationId: string) {
+  await getProductForUser(userId, productId);
+  const [current] = await db.execute<{ id: string; result: string; hypothesis: string }>(sql`
+    update product_validations set deleted_at = now(), updated_at = now()
+    where id = ${validationId} and product_id = ${productId} and user_id = ${userId} and deleted_at is null
+    returning id, result, hypothesis`);
+  if (!current) throw new Error("Validation record not found.");
+
+  await db.insert(auditLogs).values({
+    userId: requireUserId(userId), action: "product.validation_deleted", entityType: "product_validation", entityId: validationId,
+    oldValues: current,
+    newValues: { deleted: true },
+  });
+}
+
 export async function transitionProductForUser(
   userId: string,
   productId: string,
@@ -112,9 +161,7 @@ export async function transitionProductForUser(
   let overrideReason: string | undefined;
 
   if (nextStatus === "building" && currentStatus !== "validated" && currentStatus !== "paused") {
-    if (!options.overrideValidation) {
-      throw new Error("Product must be validated before building.");
-    }
+    if (!options.overrideValidation) throw new Error("Product must be validated before building.");
     overrideReason = normalizeBuildOverrideReason(options.overrideReason);
   } else {
     assertProductTransition(currentStatus, nextStatus);
@@ -122,13 +169,10 @@ export async function transitionProductForUser(
 
   if (nextStatus === "validated") {
     const [positiveCount] = await db.select({ count: sql<number>`count(*)` }).from(productValidations).where(and(
-      eq(productValidations.userId, userId),
-      eq(productValidations.productId, productId),
-      eq(productValidations.result, "positive"),
+      eq(productValidations.userId, userId), eq(productValidations.productId, productId), eq(productValidations.result, "positive"),
+      sql`${productValidations}.deleted_at is null`,
     ));
-    if (Number(positiveCount?.count ?? 0) === 0) {
-      throw new Error("At least one positive validation is required.");
-    }
+    if (Number(positiveCount?.count ?? 0) === 0) throw new Error("At least one positive validation is required.");
   }
 
   const [product] = await db.update(products).set({
@@ -139,14 +183,9 @@ export async function transitionProductForUser(
 
   if (overrideReason) {
     await db.insert(auditLogs).values({
-      userId: requireUserId(userId),
-      action: "product.validation_override",
-      entityType: "product",
-      entityId: productId,
-      oldValues: { status: currentStatus },
-      newValues: { status: nextStatus, overrideReason },
+      userId: requireUserId(userId), action: "product.validation_override", entityType: "product", entityId: productId,
+      oldValues: { status: currentStatus }, newValues: { status: nextStatus, overrideReason },
     });
   }
-
   return assertOwnedRecord(product);
 }
