@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      PGPASSWORD: ci
+      AUTH_SECRET: ci-only-secret-ci-only-secret
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      APP_TIMEZONE: Asia/Jakarta
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Apply baseline migration
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f drizzle/0000_phase_zero_foundation.sql
+
+      - name: Verify ownership isolation in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/ownership.sql
+
+      - name: Verify project mutation isolation in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/project-mutations.sql
+
+      - name: Verify active project capacity in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/active-project-limits.sql
+
+      - name: Verify capacity override audit events in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/capacity-overrides.sql
+
+      - name: Verify project score ownership in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/project-scoring.sql
+
+      - name: Verify revenue engine ownership in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-engines.sql
+
+      - name: Verify project revenue engine ownership links in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/project-revenue-engine-links.sql
+
+      - name: Verify revenue engine economics aggregation in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/revenue-engine-economics.sql
+
+      - name: Verify time entry ownership and aggregation in PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/integration/time-entries.sql
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
