@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import type { ProjectStatus } from "@/domain/projects/lifecycle";
 import { requireSessionUser } from "@/server/auth/session";
 import {
   createProjectForUser,
   transitionProjectForUser,
   updateProjectForUser,
-  type ProjectStatus,
 } from "@/server/repositories/projects";
 import { parseProjectFormData } from "./schema";
 
