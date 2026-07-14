@@ -3,6 +3,8 @@ export const ACTIVE_PROJECT_LIMITS = {
   experiment: 2,
 } as const;
 
+export const MIN_CAPACITY_OVERRIDE_REASON_LENGTH = 20;
+
 export type ActiveProjectBucket = keyof typeof ACTIVE_PROJECT_LIMITS;
 
 export function getActiveProjectBucket(projectType: string): ActiveProjectBucket {
@@ -27,6 +29,18 @@ export function assertActiveProjectCapacity(
       `Active project limit reached for ${bucket}: ${currentActiveCount}/${limit}. Pause or complete another project first.`,
     );
   }
+}
+
+export function normalizeCapacityOverrideReason(reason: string | null | undefined): string {
+  const normalized = reason?.trim() ?? "";
+
+  if (normalized.length < MIN_CAPACITY_OVERRIDE_REASON_LENGTH) {
+    throw new Error(
+      `Override reason must contain at least ${MIN_CAPACITY_OVERRIDE_REASON_LENGTH} characters.`,
+    );
+  }
+
+  return normalized;
 }
 
 export function getRemainingActiveSlots(
