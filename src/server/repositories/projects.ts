@@ -3,7 +3,7 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { auditLogs, projects } from "@/db/schema";
+import { auditLogs, projects, revenueEngines } from "@/db/schema";
 import {
   ACTIVE_PROJECT_LIMITS,
   assertActiveProjectCapacity,
@@ -25,6 +25,7 @@ export type ProjectInput = {
   description?: string | null;
   projectType: string;
   priority: string;
+  revenueEngineId?: string | null;
   startDate?: string | null;
   targetCompletionDate?: string | null;
   estimatedHours: string;
@@ -42,6 +43,30 @@ export type ProjectTransitionOptions = {
   overrideCapacity?: boolean;
   overrideReason?: string | null;
 };
+
+async function assertOwnedRevenueEngineAssignment(
+  userId: string,
+  revenueEngineId?: string | null,
+) {
+  if (!revenueEngineId) return null;
+
+  const [engine] = await db
+    .select({ id: revenueEngines.id })
+    .from(revenueEngines)
+    .where(
+      and(
+        eq(revenueEngines.id, revenueEngineId),
+        ownedBy(revenueEngines.userId, userId, revenueEngines.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!engine) {
+    throw new Error("Revenue engine was not found or is not accessible.");
+  }
+
+  return engine.id;
+}
 
 export async function listProjectsForUser(userId: string) {
   return db
@@ -103,11 +128,17 @@ export async function getProjectForUser(userId: string, projectId: string) {
 }
 
 export async function createProjectForUser(userId: string, input: ProjectInput) {
+  const revenueEngineId = await assertOwnedRevenueEngineAssignment(
+    userId,
+    input.revenueEngineId,
+  );
+
   const [project] = await db
     .insert(projects)
     .values({
       userId: requireUserId(userId),
       ...input,
+      revenueEngineId,
       status: "idea",
       description: input.description || null,
       startDate: input.startDate || null,
@@ -126,6 +157,10 @@ export async function updateProjectForUser(
   input: ProjectInput,
 ) {
   const current = await getProjectForUser(userId, projectId);
+  const revenueEngineId = await assertOwnedRevenueEngineAssignment(
+    userId,
+    input.revenueEngineId,
+  );
 
   if (current.status === "active") {
     const currentBucket = getActiveProjectBucket(current.projectType);
@@ -141,6 +176,7 @@ export async function updateProjectForUser(
     .update(projects)
     .set({
       ...input,
+      revenueEngineId,
       description: input.description || null,
       startDate: input.startDate || null,
       targetCompletionDate: input.targetCompletionDate || null,
@@ -240,11 +276,6 @@ export async function transitionProjectForUser(
   return updatedProject;
 }
 
-/**
- * Archive keeps a project visible for historical reporting.
- * Soft delete is a separate, destructive operation and is only allowed after
- * cancellation or archival. Normal reads always exclude soft-deleted records.
- */
 export async function softDeleteProjectForUser(userId: string, projectId: string) {
   const current = await getProjectForUser(userId, projectId);
   const status = current.status as ProjectStatus;
