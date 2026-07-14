@@ -26,11 +26,11 @@ BEGIN
 
   INSERT INTO projects (
     user_id, revenue_engine_id, name, project_type, status, priority,
-    estimated_hours, actual_hours, revenue_potential, actual_revenue
+    estimated_hours, actual_hours, revenue_potential, actual_revenue, deleted_at
   ) VALUES
-    (user_a, engine_a, 'A Active', 'client', 'active', 'high', 20, 10, 5000000, 2000000),
-    (user_a, engine_a, 'A Completed', 'client', 'completed', 'medium', 10, 8, 3000000, 3000000),
-    (user_b, engine_b, 'B Foreign', 'client', 'active', 'high', 100, 50, 999000000, 999000000),
+    (user_a, engine_a, 'A Active', 'client', 'active', 'high', 20, 10, 5000000, 2000000, NULL),
+    (user_a, engine_a, 'A Completed', 'client', 'completed', 'medium', 10, 8, 3000000, 3000000, NULL),
+    (user_b, engine_b, 'B Foreign', 'client', 'active', 'high', 100, 50, 999000000, 999000000, NULL),
     (user_a, engine_a, 'A Deleted', 'client', 'active', 'low', 99, 99, 99000000, 99000000, now());
 
   SELECT
