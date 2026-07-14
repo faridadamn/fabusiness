@@ -21,6 +21,7 @@ import {
 import { requireSessionUser } from "@/server/auth/session";
 import {
   getRevenueEngineForUser,
+  getRevenueEngineProductSummaryForUser,
   getRevenueEngineProjectSummaryForUser,
 } from "@/server/repositories/revenue-engines";
 import { getRevenueLedgerForUser } from "@/server/repositories/revenue-transactions";
@@ -47,9 +48,10 @@ export default async function EditRevenueEnginePage({
   const { engineId } = await params;
   const filters = await searchParams;
   const userId = await requireSessionUser();
-  const [engine, portfolio, ledger] = await Promise.all([
+  const [engine, portfolio, productPortfolio, ledger] = await Promise.all([
     getRevenueEngineForUser(userId, engineId),
     getRevenueEngineProjectSummaryForUser(userId, engineId),
+    getRevenueEngineProductSummaryForUser(userId, engineId),
     getRevenueLedgerForUser(userId, engineId, {
       startDate: filters.startDate || undefined,
       endDate: filters.endDate || undefined,
@@ -78,16 +80,10 @@ export default async function EditRevenueEnginePage({
       </div>
 
       <form className="card ledger-filter" method="get">
-        <div>
-          <p className="eyebrow">REPORTING PERIOD</p>
-          <h2>Filter ledger and financial metrics</h2>
-        </div>
+        <div><p className="eyebrow">REPORTING PERIOD</p><h2>Filter ledger and financial metrics</h2></div>
         <label className="field">Start date<input name="startDate" type="date" defaultValue={filters.startDate ?? ""} /></label>
         <label className="field">End date<input name="endDate" type="date" defaultValue={filters.endDate ?? ""} /></label>
-        <div className="action-row">
-          <button className="button button-primary" type="submit">Apply period</button>
-          <Link className="button button-ghost" href={`/revenue-engines/${engine.id}/edit`}>Clear</Link>
-        </div>
+        <div className="action-row"><button className="button button-primary" type="submit">Apply period</button><Link className="button button-ghost" href={`/revenue-engines/${engine.id}/edit`}>Clear</Link></div>
       </form>
 
       <div className="metric-grid">
@@ -118,29 +114,21 @@ export default async function EditRevenueEnginePage({
               <label className="field field-wide">Description<input name="description" minLength={3} maxLength={500} required /></label>
               <div className="form-actions field-wide"><button className="button button-primary" type="submit">Save transaction</button></div>
             </form>
-
             {ledger.transactions.length > 0 ? (
-              <div className="transaction-list">
-                {ledger.transactions.map((transaction) => (
-                  <details className="transaction-item" key={transaction.id}>
-                    <summary>
-                      <div><strong>{transaction.description}</strong><p>{transaction.occurredOn} · {transaction.source}</p></div>
-                      <div className="project-economics"><strong>{transaction.transactionType === "expense" ? "−" : "+"}{formatCurrency(Number(transaction.amount))}</strong><span>{transaction.transactionType}</span></div>
-                    </summary>
-                    <form action={updateRevenueTransactionAction.bind(null, engine.id, transaction.id)} className="form-grid transaction-edit-form">
-                      <label className="field">Type<select name="transactionType" defaultValue={transaction.transactionType}><option value="income">Income</option><option value="expense">Expense</option></select></label>
-                      <label className="field">Amount<input name="amount" type="number" min="1" step="1000" defaultValue={Number(transaction.amount)} required /></label>
-                      <label className="field">Date<input name="occurredOn" type="date" defaultValue={transaction.occurredOn} required /></label>
-                      <label className="field">Linked project<select name="projectId" defaultValue={transaction.projectId ?? ""}><option value="">No project</option>{portfolio.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-                      <label className="field field-wide">Description<input name="description" defaultValue={transaction.description} minLength={3} maxLength={500} required /></label>
-                      <div className="form-actions field-wide"><button className="button button-primary" type="submit">Save edit</button></div>
-                    </form>
-                    <form action={deleteRevenueTransactionAction.bind(null, engine.id, transaction.id)} className="transaction-delete-form">
-                      <button className="button button-ghost" type="submit">Soft delete transaction</button>
-                    </form>
-                  </details>
-                ))}
-              </div>
+              <div className="transaction-list">{ledger.transactions.map((transaction) => (
+                <details className="transaction-item" key={transaction.id}>
+                  <summary><div><strong>{transaction.description}</strong><p>{transaction.occurredOn} · {transaction.source}</p></div><div className="project-economics"><strong>{transaction.transactionType === "expense" ? "−" : "+"}{formatCurrency(Number(transaction.amount))}</strong><span>{transaction.transactionType}</span></div></summary>
+                  <form action={updateRevenueTransactionAction.bind(null, engine.id, transaction.id)} className="form-grid transaction-edit-form">
+                    <label className="field">Type<select name="transactionType" defaultValue={transaction.transactionType}><option value="income">Income</option><option value="expense">Expense</option></select></label>
+                    <label className="field">Amount<input name="amount" type="number" min="1" step="1000" defaultValue={Number(transaction.amount)} required /></label>
+                    <label className="field">Date<input name="occurredOn" type="date" defaultValue={transaction.occurredOn} required /></label>
+                    <label className="field">Linked project<select name="projectId" defaultValue={transaction.projectId ?? ""}><option value="">No project</option>{portfolio.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+                    <label className="field field-wide">Description<input name="description" defaultValue={transaction.description} minLength={3} maxLength={500} required /></label>
+                    <div className="form-actions field-wide"><button className="button button-primary" type="submit">Save edit</button></div>
+                  </form>
+                  <form action={deleteRevenueTransactionAction.bind(null, engine.id, transaction.id)} className="transaction-delete-form"><button className="button button-ghost" type="submit">Soft delete transaction</button></form>
+                </details>
+              ))}</div>
             ) : <p className="muted">Tidak ada transaksi pada periode yang dipilih.</p>}
           </div>
         </div>
@@ -154,6 +142,17 @@ export default async function EditRevenueEnginePage({
             </div>
             {portfolio.projects.length === 0 ? <p className="muted">Belum ada project yang dihubungkan ke revenue engine ini.</p> : (
               <div className="project-list">{portfolio.projects.map((project) => <Link key={project.id} href={`/projects/${project.id}/edit`} className="project-row"><div><strong>{project.name}</strong><p>{project.status} · {formatCurrency(Number(project.revenuePotential))} potential</p></div><div className="project-economics"><strong>{Number(project.actualHours).toFixed(1)} jam</strong><span>{Number(project.estimatedHours).toFixed(1)} jam estimasi</span></div></Link>)}</div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="card-header-row"><div><p className="eyebrow">LINKED PRODUCTS</p><h2>Offers monetized by this engine</h2></div><span className="badge">{productPortfolio.products.length}</span></div>
+            <div className="capacity-grid">
+              <div className="capacity-card"><span>Launched</span><strong>{productPortfolio.summary.launchedProducts}</strong><small>{productPortfolio.summary.linkedProducts} total linked</small></div>
+              <div className="capacity-card"><span>In development</span><strong>{Number(productPortfolio.summary.buildingProducts) + Number(productPortfolio.summary.validatedProducts)}</strong><small>validated + building</small></div>
+            </div>
+            {productPortfolio.products.length === 0 ? <p className="muted">Belum ada product yang dihubungkan ke revenue engine ini.</p> : (
+              <div className="project-list">{productPortfolio.products.map((product) => <Link key={product.id} href={`/products/${product.id}/edit`} className="project-row"><div><strong>{product.name}</strong><p>{product.productType} · {product.status}</p></div><div className="project-economics"><strong>{formatCurrency(Number(product.price))}</strong><span>{product.launchedAt ? `launched ${product.launchedAt.toLocaleDateString("id-ID")}` : "not launched"}</span></div></Link>)}</div>
             )}
           </div>
 
