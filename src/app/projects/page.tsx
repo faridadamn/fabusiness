@@ -1,13 +1,19 @@
 import Link from "next/link";
 
 import { requireSessionUser } from "@/server/auth/session";
-import { listProjectsForUser } from "@/server/repositories/projects";
+import {
+  getActiveProjectCapacityForUser,
+  listProjectsForUser,
+} from "@/server/repositories/projects";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage() {
   const userId = await requireSessionUser();
-  const projects = await listProjectsForUser(userId);
+  const [projects, capacity] = await Promise.all([
+    listProjectsForUser(userId),
+    getActiveProjectCapacityForUser(userId),
+  ]);
 
   return (
     <section className="stack-lg">
@@ -18,6 +24,19 @@ export default async function ProjectsPage() {
           <p className="page-description">Kelola project dari ide sampai selesai tanpa kehilangan ownership dan konteks bisnis.</p>
         </div>
         <Link href="/projects/new" className="button button-primary">New project</Link>
+      </div>
+
+      <div className="capacity-grid" aria-label="Active project capacity">
+        <div className="capacity-card">
+          <span>Main projects</span>
+          <strong>{capacity.main.active}/{capacity.main.limit}</strong>
+          <small>{capacity.main.remaining} slot tersisa</small>
+        </div>
+        <div className="capacity-card">
+          <span>Experiments</span>
+          <strong>{capacity.experiment.active}/{capacity.experiment.limit}</strong>
+          <small>{capacity.experiment.remaining} slot tersisa</small>
+        </div>
       </div>
 
       {projects.length === 0 ? (
